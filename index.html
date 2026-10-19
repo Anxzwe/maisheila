@@ -103,6 +103,55 @@
       font-size: 0.85rem;
     }
 
+    .music-toggle {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1;
+      display: grid;
+      width: 2.75rem;
+      height: 2.75rem;
+      padding: 0;
+      place-items: center;
+      border: 1px solid rgb(193 177 255 / 45%);
+      border-radius: 999px;
+      background: #b9a9ff;
+      color: #17152b;
+      cursor: pointer;
+    }
+
+    .music-toggle:hover {
+      background: #c9bdff;
+    }
+
+    .music-toggle svg {
+      width: 1.25rem;
+      height: 1.25rem;
+      fill: currentColor;
+    }
+
+    .music-toggle[aria-pressed="true"] .play-icon,
+    .music-toggle[aria-pressed="false"] .pause-icon {
+      display: none;
+    }
+
+    .music-toggle:focus-visible {
+      outline: 3px solid #f5f3ff;
+      outline-offset: 3px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     @media (max-width: 480px) {
       main {
         padding-inline: 0;
@@ -120,6 +169,16 @@
 </head>
 
 <body>
+  <button class="music-toggle" id="musicToggle" type="button" aria-label="Reanudar música" aria-pressed="false">
+    <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M8 5v14l11-7z"></path>
+    </svg>
+    <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6 5h4v14H6zm8 0h4v14h-4z"></path>
+    </svg>
+  </button>
+  <span class="sr-only" id="musicStatus" role="status" aria-live="polite"></span>
+
   <main>
 
     <h1>Falta poco para que Maisheila vea a los beteeses</h1>
@@ -155,13 +214,13 @@
   <script>
 
     window.addEventListener('load', () => {
-    const audio = document.getElementById('backgroundMusic');
+      const audio = document.getElementById('backgroundMusic');
 
-    audio.play().catch(error => {
-      console.log('El navegador bloqueó la reproducción automática.');
+      audio.play().catch(error => {
+        console.log('El navegador bloqueó la reproducción automática.');
+      });
     });
-  });
-    
+
     const target = new Date(2026, 9, 24, 20, 0, 0);
     const units = {
       days: document.getElementById("days"),
@@ -171,6 +230,77 @@
     };
     const note = document.getElementById("note");
     const backgroundMusic = document.getElementById("backgroundMusic");
+    const musicToggle = document.getElementById("musicToggle");
+    const musicStatus = document.getElementById("musicStatus");
+    let musicPausedByUser = false;
+
+    function updateMusicToggle() {
+      const isPlaying = !backgroundMusic.paused;
+      musicToggle.setAttribute("aria-pressed", String(isPlaying));
+      musicToggle.setAttribute("aria-label", isPlaying ? "Pausar música" : "Reanudar música");
+    }
+
+    function removePlaybackRetryListeners() {
+      window.removeEventListener("pointerdown", retryBackgroundMusic);
+      window.removeEventListener("keydown", retryBackgroundMusic);
+    }
+
+    async function retryBackgroundMusic(event) {
+      if (musicPausedByUser || musicToggle.contains(event.target)) {
+        return;
+      }
+
+      removePlaybackRetryListeners();
+      await startBackgroundMusic();
+    }
+
+    async function startBackgroundMusic() {
+      try {
+        await backgroundMusic.play();
+        removePlaybackRetryListeners();
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          window.addEventListener("pointerdown", retryBackgroundMusic);
+          window.addEventListener("keydown", retryBackgroundMusic);
+          return;
+        }
+
+        console.error("No se pudo reproducir el audio de fondo.", error);
+      }
+    }
+
+    musicToggle.addEventListener("click", async () => {
+      if (!backgroundMusic.paused) {
+        musicPausedByUser = true;
+        backgroundMusic.pause();
+        musicStatus.textContent = "Música pausada.";
+        updateMusicToggle();
+        return;
+      }
+
+      musicPausedByUser = false;
+      try {
+        await backgroundMusic.play();
+        musicStatus.textContent = "Música reanudada.";
+        updateMusicToggle();
+        removePlaybackRetryListeners();
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          window.addEventListener("pointerdown", retryBackgroundMusic);
+          window.addEventListener("keydown", retryBackgroundMusic);
+          musicStatus.textContent = "El navegador bloqueó el audio. Revisa los permisos de sonido para este sitio e inténtalo de nuevo.";
+          return;
+        }
+
+        musicStatus.textContent = "No se pudo reproducir el audio.";
+        console.error("No se pudo reproducir el audio de fondo.", error);
+      }
+    });
+
+    backgroundMusic.addEventListener("play", updateMusicToggle);
+    backgroundMusic.addEventListener("pause", updateMusicToggle);
+    updateMusicToggle();
+    startBackgroundMusic();
 
     function updateCountdown() {
       const remaining = target.getTime() - Date.now();
