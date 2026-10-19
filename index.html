@@ -161,6 +161,25 @@
       seconds: document.getElementById("seconds")
     };
     const note = document.getElementById("note");
+    const backgroundMusic = document.getElementById("backgroundMusic");
+
+    async function startBackgroundMusic() {
+      try {
+        await backgroundMusic.play();
+        window.removeEventListener("pointerdown", startBackgroundMusic);
+        window.removeEventListener("keydown", startBackgroundMusic);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          window.addEventListener("pointerdown", startBackgroundMusic);
+          window.addEventListener("keydown", startBackgroundMusic);
+          return;
+        }
+
+        console.error("No se pudo reproducir el audio de fondo.", error);
+      }
+    }
+
+    startBackgroundMusic();
 
     function updateCountdown() {
       const remaining = target.getTime() - Date.now();
